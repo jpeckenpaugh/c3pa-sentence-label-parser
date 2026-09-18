@@ -228,7 +228,7 @@ def process_document(doc_id: str, html_path: str, csv_path: str):
     }
 
 
-def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None):
+def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None, export_master: bool = False):
     """Runs pipeline over the dataset documents."""
     os.makedirs(output_dir, exist_ok=True)
     
@@ -261,7 +261,10 @@ def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None):
     
     all_single_candidates = []
     high_conf_candidates = []
-    excluded_multilabel = []
+    multi_label_candidates = []
+    unannotated_candidates = []
+    all_sentences_master = []
+    
     all_unmatched = []
     all_ambiguous = []
     
@@ -284,10 +287,13 @@ def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None):
             annotators = sorted(list(ev["annotators"]))
             align_types = sorted(list(ev["alignment_types"]))
             
+            category = "unannotated" if len(v_labels) == 0 else "single_label" if len(v_labels) == 1 else "multi_label"
+            
             row = {
                 "doc_id": ev["doc_id"],
                 "sentence_id": ev["sentence_id"],
                 "sentence_text": ev["sentence_text"],
+                "sentence_category": category,
                 "verbatim_label": v_labels[0] if len(v_labels) == 1 else "MULTI_LABEL" if len(v_labels) > 1 else "",
                 "verbatim_labels": ";".join(v_labels),
                 "annotator_count": len(annotators),
@@ -298,18 +304,21 @@ def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None):
                 "source_annotation_file": ev["source_annotation_file"]
             }
             
+            all_sentences_master.append(row)
+            
             if len(v_labels) == 0:
                 sentences_no_labels += 1
+                unannotated_candidates.append(row)
             elif len(v_labels) == 1:
                 all_single_candidates.append(row)
                 if len(annotators) >= 2:
                     high_conf_candidates.append(row)
             else:
-                excluded_multilabel.append(row)
+                multi_label_candidates.append(row)
                 
     # Write output CSVs
     fieldnames = [
-        "doc_id", "sentence_id", "sentence_text", "verbatim_label",
+        "doc_id", "sentence_id", "sentence_text", "sentence_category", "verbatim_label",
         "verbatim_labels", "annotator_count", "annotators",
         "source_annotation_count", "alignment_type", "source_html", "source_annotation_file"
     ]
@@ -321,16 +330,35 @@ def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None):
             writer.writeheader()
             writer.writerows(rows)
 
-    write_csv("candidate_sentences_all.csv", all_single_candidates, fieldnames)
-    write_csv("candidate_sentences_high_confidence.csv", high_conf_candidates, fieldnames)
-    write_csv("excluded_multilabel.csv", excluded_multilabel, fieldnames)
-
     unmatched_fields = ["doc_id", "annotation_id", "ranumb", "annotation_original", "c3pa_label", "source_csv"]
-    write_csv("unmatched_annotations.csv", all_unmatched, unmatched_fields)
-    
     ambiguous_fields = ["doc_id", "annotation_id", "ranumb", "annotation_original", "c3pa_label", "matched_sentences", "source_csv"]
-    write_csv("ambiguous_annotations.csv", all_ambiguous, ambiguous_fields)
+
+    write_csv("single_label_sentences_all.csv", all_single_candidates, fieldnames)
+    write_csv("single_label_sentences_high_confidence.csv", high_conf_candidates, fieldnames)
+    write_csv("multi_label_sentences.csv", multi_label_candidates, fieldnames)
+    write_csv("unannotated_sentences.csv", unannotated_candidates, fieldnames)
+    write_csv("annotations_unmatched.csv", all_unmatched, unmatched_fields)
+    write_csv("annotations_ambiguous.csv", all_ambiguous, ambiguous_fields)
+
+    if export_master:
+        write_csv("all_parsed_sentences.csv", all_sentences_master, fieldnames)
+    else:
+        master_path = os.path.join(output_dir, "all_parsed_sentences.csv")
+        if os.path.exists(master_path):
+            try:
+                os.remove(master_path)
+            except OSError:
+                pass
     
+    # Clean up old file names if present
+    for old_file in ["candidate_sentences_all.csv", "candidate_sentences_high_confidence.csv", "excluded_multilabel.csv", "unmatched_annotations.csv", "ambiguous_annotations.csv"]:
+        old_path = os.path.join(output_dir, old_file)
+        if os.path.exists(old_path):
+            try:
+                os.remove(old_path)
+            except OSError:
+                pass
+
     # Calculate verbatim class distribution
     label_counts = {}
     for r in all_single_candidates:
@@ -348,7 +376,7 @@ def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None):
     print(f"Annotations ambiguous:                  {total_ambiguous:,}")
     print(f"Sentences with 0 C3PA labels:          {sentences_no_labels:,}")
     print(f"Sentences with exactly 1 verbatim label:{len(all_single_candidates):,}")
-    print(f"Sentences with >1 verbatim labels:     {len(excluded_multilabel):,}")
+    print(f"Sentences with >1 verbatim labels:     {len(multi_label_candidates):,}")
     print(f"High-confidence single-label candidates:{len(high_conf_candidates):,}")
     print("-" * 60)
     print("Verbatim C3PA Class Distribution (Single-Label Candidates):")
@@ -362,6 +390,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset-dir", default="C3PA_Dataset", help="Path to C3PA dataset directory")
     parser.add_argument("--output-dir", default="output", help="Directory to output candidate CSVs")
     parser.add_argument("--sanity-check", help="Sanity check a single document, e.g. DB/2")
+    parser.add_argument("--export-master", action="store_true", help="Export all_parsed_sentences.csv master file (~45MB)")
     args = parser.parse_args()
     
-    run_pipeline(args.dataset_dir, args.output_dir, single_doc=args.sanity_check)
+    run_pipeline(args.dataset_dir, args.output_dir, single_doc=args.sanity_check, export_master=args.export_master)

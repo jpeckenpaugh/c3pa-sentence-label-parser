@@ -1,6 +1,0 @@
-doc_id,annotation_id,ranumb,annotation_original,c3pa_label,matched_sentences,source_csv
-DB_2,12,ra3, Registered users can view and edit personal information they have already given us.,Description of Right to Correct Information,DB_2_S35;DB_2_S115,C3PA_Dataset/Annotations/DB/2.csv
-DB_2,14,ra3, Registered users can view and edit personal information they have already given us.,Description of Right to Know PI Collected,DB_2_S35;DB_2_S115,C3PA_Dataset/Annotations/DB/2.csv
-DB_2,53,ra1,Blackbaud does not sell your personal information collected in connection with BBID or share your personal information with any third parties for targeted behavioral advertising.,Categories of Personal Information Sold,DB_2_S30;DB_2_S85,C3PA_Dataset/Annotations/DB/2.csv
-DB_2,70,ra1,Blackbaud does not sell your personal information collected in connection with BBID,Categories of Personal Information Sold,DB_2_S30;DB_2_S85,C3PA_Dataset/Annotations/DB/2.csv
-DB_2,71,ra1,or share your personal information with any third parties for targeted behavioral advertising.,Categories of Personal Information Shared / Disclosed,DB_2_S30;DB_2_S85,C3PA_Dataset/Annotations/DB/2.csv

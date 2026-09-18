@@ -186,24 +186,28 @@ Run a pre-flight check on a specific document (e.g., `DB/2`):
 
 ## Output File Reference
 
-The parser writes generated CSV deliverables to the `output/` directory:
+The parser writes generated CSV deliverables to the `output/` directory (all files are under 15 MB for lightweight git tracking):
 
-| Output File | Rows | Description |
-| :--- | :--- | :--- |
-| **`candidate_sentences_all.csv`** | 44,987 | All sentences receiving exactly 1 verbatim C3PA label. |
-| **`candidate_sentences_high_confidence.csv`** | 24,621 | Single-label sentences supported by $\ge 2$ distinct annotators with 0 conflicts. |
-| **`excluded_multilabel.csv`** | 41,556 | Sentences receiving $>1$ verbatim C3PA labels across annotators. |
-| **`unmatched_annotations.csv`** | 626 | Annotation spans that could not be aligned to HTML sentences. |
-| **`ambiguous_annotations.csv`** | 2,214 | Short sub-sentence text spans matching $>1$ sentence in a document. |
+| Output File | Rows | File Size | Description |
+| :--- | :--- | :--- | :--- |
+| **`single_label_sentences_all.csv`** | 44,987 | ~14 MB | All sentences receiving **exactly 1** verbatim C3PA label. |
+| **`single_label_sentences_high_confidence.csv`** | 24,621 | ~8.1 MB | Single-label sentences supported by **$\ge 2$ distinct annotators** with 0 conflicts. |
+| **`multi_label_sentences.csv`** | 41,556 | ~15 MB | Sentences receiving **$>1$ verbatim C3PA labels** across annotators. |
+| **`unannotated_sentences.csv`** | 84,405 | ~15 MB | HTML policy sentences receiving **0 annotations** (ideal for negative sampling). |
+| **`annotations_unmatched.csv`** | 626 | ~308 KB | Annotation spans that could not be aligned to HTML text. |
+| **`annotations_ambiguous.csv`** | 2,214 | ~694 KB | Short sub-sentence text spans matching $>1$ sentence in a document. |
 
-### Candidate CSV Schema
+> **Optional Master Export:** To generate `all_parsed_sentences.csv` (~45 MB master file containing all 170,948 sentences), pass `--export-master` to `parse_c3pa_sentences.py`.
 
-All candidate CSV files (`candidate_sentences_all.csv`, `candidate_sentences_high_confidence.csv`, `excluded_multilabel.csv`) share the following schema:
+### Sentence CSV Schema
+
+All sentence CSV deliverables (`single_label_sentences_all.csv`, `single_label_sentences_high_confidence.csv`, `multi_label_sentences.csv`, `unannotated_sentences.csv`) share a consistent schema:
 
 - `doc_id`: Document identifier (e.g., `DB_2`, `WS_17`)
 - `sentence_id`: Reconstructed sentence identifier (e.g., `DB_2_S10`)
 - `sentence_text`: Exact grammatical sentence string extracted from HTML
-- `verbatim_label`: Primary verbatim C3PA label (`MULTI_LABEL` if multiple labels present)
+- `sentence_category`: Category flag (`single_label`, `multi_label`, or `unannotated`)
+- `verbatim_label`: Primary verbatim C3PA label (`MULTI_LABEL` if multiple labels present, empty if unannotated)
 - `verbatim_labels`: Semicolon-separated list of all aligned verbatim C3PA labels
 - `annotator_count`: Number of distinct human annotators supporting this sentence
 - `annotators`: Semicolon-separated list of supporting annotator IDs (`ra1`, `ra2`, etc.)
