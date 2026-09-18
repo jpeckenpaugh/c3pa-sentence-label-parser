@@ -3,6 +3,9 @@
 __pycache__/
 *.pyc
 
+# C3PA Source Dataset Clone
+C3PA_Dataset/
+
 # OS generated files
 .DS_Store
 

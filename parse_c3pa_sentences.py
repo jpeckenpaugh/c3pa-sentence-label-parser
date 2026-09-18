@@ -152,25 +152,46 @@ def process_document(doc_id: str, html_path: str, csv_path: str):
     
     for ann in annotations:
         ann_norm = ann["annotation_normalized"]
-        matching = []
+        ann_tokens = set(ann_norm.split())
         
-        for sent in sentences:
-            sent_norm = sent["sentence_normalized"]
+        # 1. Case A: Sub-sentence fragment contained in sentence(s)
+        case_a_matches = [s for s in sentences if ann_norm in s["sentence_normalized"]]
+        if len(case_a_matches) == 1:
+            aligned_matches.append((ann, case_a_matches[0], "annotation_in_sentence"))
+            continue
+        elif len(case_a_matches) > 1:
+            # Short fragment appearing in multiple distinct sentences is ambiguous
+            ambiguous.append((ann, [s["sentence_id"] for s in case_a_matches]))
+            continue
             
-            # Case A: annotation span contained within sentence
-            if ann_norm in sent_norm:
-                matching.append((sent, "annotation_in_sentence"))
-            # Case B: sentence contained within multi-sentence annotation
-            elif sent_norm in ann_norm:
-                matching.append((sent, "sentence_in_annotation"))
+        # 2. Case B: Multi-sentence paragraph span containing 1 or more full sentences
+        case_b_matches = [
+            s for s in sentences
+            if s["sentence_normalized"] in ann_norm and len(s["sentence_normalized"]) > 10
+        ]
+        if case_b_matches:
+            for sent in case_b_matches:
+                aligned_matches.append((ann, sent, "sentence_in_annotation_paragraph"))
+            continue
+            
+        # 3. Case C: Partial overlap matching for cross-sentence boundary selections
+        if len(ann_tokens) >= 3:
+            best_sent = None
+            best_overlap = 0.0
+            for sent in sentences:
+                sent_tokens = set(sent["sentence_normalized"].split())
+                intersection = ann_tokens.intersection(sent_tokens)
+                if intersection:
+                    overlap = len(intersection) / len(ann_tokens)
+                    if overlap > best_overlap and overlap >= 0.55:
+                        best_overlap = overlap
+                        best_sent = sent
+            if best_sent:
+                aligned_matches.append((ann, best_sent, "partial_overlap"))
+                continue
                 
-        if len(matching) == 1:
-            sent, align_type = matching[0]
-            aligned_matches.append((ann, sent, align_type))
-        elif len(matching) > 1:
-            ambiguous.append((ann, [m[0]["sentence_id"] for m in matching]))
-        else:
-            unmatched.append(ann)
+        # If no alignment could be established
+        unmatched.append(ann)
             
     # Aggregate sentence evidence
     evidence = {
