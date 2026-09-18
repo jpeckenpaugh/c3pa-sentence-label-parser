@@ -158,26 +158,20 @@ Verbatim C3PA Class Distribution (Single-Label Candidates):
 
 ## Quick Start & Usage
 
-### 1. Requirements
+### 1. Automated Installation & Setup
 
-- Python 3.9+
-- Dependencies: `beautifulsoup4`, `spacy`
+Run `install.sh` to set up the Python virtual environment (`.venv`), install required dependencies (`requirements.txt`), and automatically clone the [C3PA Dataset](https://github.com/MaazBinMusa/C3PA_Dataset.git) repository into `C3PA_Dataset/`:
 
 ```bash
-# Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install required dependencies
-pip install beautifulsoup4 spacy
+./install.sh
 ```
 
 ### 2. Execution
 
-Run the complete pipeline over all 400 documents in `C3PA_Dataset`:
+Run the complete pipeline over all 400 documents using `parse.sh`:
 
 ```bash
-python parse_c3pa_sentences.py --dataset-dir C3PA_Dataset --output-dir output
+./parse.sh
 ```
 
 ### 3. Single-Document Sanity Check
@@ -185,7 +179,7 @@ python parse_c3pa_sentences.py --dataset-dir C3PA_Dataset --output-dir output
 Run a pre-flight check on a specific document (e.g., `DB/2`):
 
 ```bash
-python parse_c3pa_sentences.py --sanity-check DB/2
+./parse.sh --sanity-check DB/2
 ```
 
 ---
