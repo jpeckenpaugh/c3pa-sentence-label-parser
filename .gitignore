@@ -11,3 +11,7 @@ C3PA_Dataset/
 
 # Scratch / temp files
 scratch/
+
+# Single-document sanity-check output and optional master export
+output/sanity/
+output/all_parsed_sentences.csv
