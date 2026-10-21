@@ -92,8 +92,23 @@ For each annotation entry and each eligible sentence in the same document, align
 
 3. **Case C — Partial Overlap (`partial_overlap`):**
    - Cross-sentence boundary selections where human annotators started or ended mid-sentence.
-   - Matched via token containment overlap ($\ge 55\%$ of annotation tokens in the sentence). This is containment, not Jaccard.
+   - Matched via token containment overlap ($\ge 55\%$ by default of annotation tokens in the sentence). This is containment, not Jaccard.
+   - The threshold is configurable with `--overlap-threshold` (see [Tuning the Case C threshold](#tuning-the-case-c-threshold)).
    - If two or more sentences tie for the best overlap, the annotation is logged as ambiguous rather than assigned arbitrarily.
+
+### Tuning the Case C threshold
+
+`--overlap-threshold` accepts a value from `0` to `1` and defaults to `0.55`. It controls how much of an annotation must appear in a single sentence before a Case C `partial_overlap` match is accepted:
+
+```bash
+# Stricter: only nearly-complete annotation/sentence overlap is accepted
+./parse.sh --overlap-threshold 0.75
+
+# Looser: recover more mid-sentence boundary selections, with more false positives
+./parse.sh --overlap-threshold 0.40
+```
+
+Lower values move annotations from `annotations_unmatched.csv` into sentence labels and can create more ambiguous ties; higher values do the reverse. A higher threshold is appropriate when precision matters more than annotation coverage. The active value is printed in the diagnostic summary and returned by `run_pipeline` as `overlap_threshold`. Any value other than `0.55` produces different CSVs from the committed baseline, so record it with your outputs.
 
 ---
 
@@ -195,6 +210,8 @@ Run the complete pipeline over all 400 documents using `parse.sh`:
 ./parse.sh
 ```
 
+The default Case C containment threshold is `0.55`. Override it with `--overlap-threshold` (for example, `./parse.sh --overlap-threshold 0.70`); see [Tuning the Case C threshold](#tuning-the-case-c-threshold) for the trade-off.
+
 ### 3. Single-Document Sanity Check
 
 Run a pre-flight check on a specific document (e.g., `DB/2`):
@@ -251,6 +268,50 @@ All sentence CSV deliverables (`single_label_sentences_all.csv`, `single_label_s
 - `source_annotation_file`: Dataset-relative path to the original CSV annotation file
 
 The `fragments_excluded.csv` file uses the same columns with empty label and annotation fields, so it can be concatenated with the candidate files for auditing. Sentence IDs are assigned to every extracted block; excluded fragments occupy the gaps in the candidate files, and the union of all files is complete.
+
+### Example Output
+
+Representative rows from the committed full-corpus run. Sentence text is shortened here with `...`; the CSV itself contains the complete text.
+
+`single_label_sentences_high_confidence.csv` — one label, supported by three annotators with no conflicts:
+
+```csv
+doc_id,sentence_id,sentence_text,sentence_category,sentence_kind,verbatim_label,verbatim_labels,annotator_count,annotators,source_annotation_count,alignment_type,exclusion_reason,source_html,source_annotation_file
+DB_1,DB_1_S9,"Lead411 reserves the right, at any time, to modify this Privacy Policy.",single_label,prose,Updated Privacy Policy,Updated Privacy Policy,3,ra1;ra2;ra3,3,annotation_in_sentence;sentence_in_annotation_paragraph,,C3PA_Dataset/Htmls/DB/1.html,C3PA_Dataset/Annotations/DB/1.csv
+```
+
+Read this as: sentence `DB_1_S9` is a prose sentence; all three annotators applied `Updated Privacy Policy`; `source_annotation_count=3` is the number of aligned annotation entries, and `alignment_type` records which Case A/B/C strategies fired.
+
+`multi_label_sentences.csv` — more than one verbatim label on the same sentence:
+
+```csv
+doc_id,sentence_id,sentence_text,sentence_category,sentence_kind,verbatim_label,verbatim_labels,annotator_count,annotators,source_annotation_count,alignment_type,exclusion_reason,source_html,source_annotation_file
+DB_1,DB_1_S25,"This usage data may be processed for the purposes of analyzing the use of the Services.",multi_label,prose,MULTI_LABEL,Categories of Personal Information Collected;Categories of Personal Information Shared / Disclosed,3,ra1;ra2;ra3,3,annotation_in_sentence;sentence_in_annotation_paragraph,,C3PA_Dataset/Htmls/DB/1.html,C3PA_Dataset/Annotations/DB/1.csv
+```
+
+`unannotated_sentences.csv` — an eligible sentence that no annotation covered. It has empty label fields and `annotator_count=0`:
+
+```csv
+doc_id,sentence_id,sentence_text,sentence_category,sentence_kind,verbatim_label,verbatim_labels,annotator_count,annotators,source_annotation_count,alignment_type,exclusion_reason,source_html,source_annotation_file
+DB_1,DB_1_S8,"Capitalized terms not defined in this Privacy Policy, shall have the meanings as defined in the Lead411 Terms, located at https://www.lead411.com/terms/.",unannotated,prose,,,0,,0,,,C3PA_Dataset/Htmls/DB/1.html,C3PA_Dataset/Annotations/DB/1.csv
+```
+
+`fragments_excluded.csv` — an extracted block that never became a candidate. `sentence_kind` and `exclusion_reason` explain why:
+
+```csv
+doc_id,sentence_id,sentence_text,sentence_category,sentence_kind,verbatim_label,verbatim_labels,annotator_count,annotators,source_annotation_count,alignment_type,exclusion_reason,source_html,source_annotation_file
+DB_1,DB_1_S1,877-673-1022,fragment,prose,,,0,,0,,no_alphabetic_text,C3PA_Dataset/Htmls/DB/1.html,C3PA_Dataset/Annotations/DB/1.csv
+```
+
+The two diagnostic CSVs use different schemas. `annotations_unmatched.csv` has `doc_id, annotation_id, ranumb, annotation_original, c3pa_label, source_csv`; `annotations_ambiguous.csv` adds a semicolon-separated `matched_sentences` list. Use them to audit recall loss rather than as training rows.
+
+### Validating Your Output
+
+After a run, these three checks catch most extraction or alignment regressions:
+
+1. **Reconcile the tiers.** In the printed summary, `single_label_all + multi_label + sentences_unannotated` must equal `sentences_evaluated`, and `sentences_evaluated + fragments_excluded` must equal `sentences_extracted`. The annotation counts must likewise satisfy `annotations_aligned_distinct + annotations_unmatched + annotations_ambiguous = annotations_considered`.
+2. **Spot-check against the source.** Pick a sentence ID from `single_label_sentences_all.csv`, find its text in the listed `source_html`, and confirm the listed `source_annotation_file` contains an annotation with the same `verbatim_label`. Start with rows whose `alignment_type` is `partial_overlap`, since those are the lowest-confidence matches.
+3. **Check label and duplicate shape.** Compare the printed verbatim label distribution with the committed baseline, and deduplicate on `(doc_id, sentence_text)` before training: the source HTML repeats some content, so identical sentences can legitimately appear more than once in a document.
 
 ---
 

@@ -58,6 +58,7 @@ NON_SENTENCE_KINDS = {"heading", "cell", "ui"}
 MIN_SENTENCE_WORDS = 3
 LONG_SENTENCE_WORDS = 5
 CASE_B_MIN_WORDS = 5
+DEFAULT_OVERLAP_THRESHOLD = 0.55
 MAX_SENTENCE_CHARS = 5000
 
 
@@ -311,7 +312,13 @@ def _source_path_label(path: str, dataset_dir: str) -> str:
     return os.path.join(root, rel).replace(os.sep, "/")
 
 
-def process_document(doc_id: str, html_path: str, csv_path: str, dataset_dir: str = "."):
+def process_document(
+    doc_id: str,
+    html_path: str,
+    csv_path: str,
+    dataset_dir: str = ".",
+    overlap_threshold: float = DEFAULT_OVERLAP_THRESHOLD,
+):
     """Processes a single document (HTML + CSV annotations)."""
     with open(html_path, "r", encoding="utf-8", errors="replace") as f:
         html_content = f.read()
@@ -402,7 +409,7 @@ def process_document(doc_id: str, html_path: str, csv_path: str, dataset_dir: st
                 if not intersection:
                     continue
                 overlap = len(intersection) / len(ann_tokens)
-                if overlap < 0.55:
+                if overlap < overlap_threshold:
                     continue
                 if len(intersection) > best_count:
                     best_count = len(intersection)
@@ -461,7 +468,13 @@ def process_document(doc_id: str, html_path: str, csv_path: str, dataset_dir: st
     }
 
 
-def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None, export_master: bool = False):
+def run_pipeline(
+    dataset_dir: str,
+    output_dir: str,
+    single_doc: str = None,
+    export_master: bool = False,
+    overlap_threshold: float = DEFAULT_OVERLAP_THRESHOLD,
+):
     """Runs pipeline over the dataset documents and returns diagnostic counts."""
     if single_doc and output_dir == "output":
         safe_doc = re.sub(r"[^A-Za-z0-9_.-]+", "_", single_doc).strip("_")
@@ -518,7 +531,13 @@ def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None, expo
     sentences_no_labels = 0
 
     for doc_id, html_path, csv_path in doc_pairs:
-        res = process_document(doc_id, html_path, csv_path, dataset_dir=dataset_dir)
+        res = process_document(
+            doc_id,
+            html_path,
+            csv_path,
+            dataset_dir=dataset_dir,
+            overlap_threshold=overlap_threshold,
+        )
 
         total_sentences += len(res["sentences"]) + len(res["fragments"])
         total_fragments += len(res["fragments"])
@@ -678,6 +697,7 @@ def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None, expo
     print(f"High-confidence single-label candidates:{len(high_conf_candidates):,}")
     print("-" * 60)
     print(f"Segmenter: {SEGMENTER_NAME}")
+    print(f"Case C overlap threshold: {overlap_threshold:g}")
     print(
         "Runtime versions: Python %s | spaCy %s | BeautifulSoup %s"
         % (
@@ -711,7 +731,19 @@ def run_pipeline(dataset_dir: str, output_dir: str, single_doc: str = None, expo
         "multi_label": len(multi_label_candidates),
         "label_counts": label_counts,
         "output_dir": output_dir,
+        "overlap_threshold": overlap_threshold,
     }
+
+
+def _overlap_threshold(value: str) -> float:
+    """argparse type for the Case C containment threshold; must be within [0, 1]."""
+    try:
+        threshold = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid float value: {value!r}")
+    if not 0.0 <= threshold <= 1.0:
+        raise argparse.ArgumentTypeError("overlap threshold must be between 0 and 1")
+    return threshold
 
 
 if __name__ == "__main__":
@@ -720,6 +752,18 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", default="output", help="Directory to output candidate CSVs")
     parser.add_argument("--sanity-check", help="Sanity check a single document, e.g. DB/2. Writes to output/sanity/DB_2 by default.")
     parser.add_argument("--export-master", action="store_true", help="Export all_parsed_sentences.csv (all candidate tiers plus excluded fragments)")
+    parser.add_argument(
+        "--overlap-threshold",
+        type=_overlap_threshold,
+        default=DEFAULT_OVERLAP_THRESHOLD,
+        help="Case C containment threshold in [0, 1] (default: %(default)s). Lower values align more annotations; higher values are stricter.",
+    )
     args = parser.parse_args()
 
-    run_pipeline(args.dataset_dir, args.output_dir, single_doc=args.sanity_check, export_master=args.export_master)
+    run_pipeline(
+        args.dataset_dir,
+        args.output_dir,
+        single_doc=args.sanity_check,
+        export_master=args.export_master,
+        overlap_threshold=args.overlap_threshold,
+    )

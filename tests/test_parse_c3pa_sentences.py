@@ -193,6 +193,53 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue(row["source_html"].startswith("C3PA_Dataset/"))
             self.assertTrue(row["source_annotation_file"].startswith("C3PA_Dataset/"))
 
+    def test_overlap_threshold_is_configurable(self):
+        html_path = os.path.join(self.dataset, "Htmls", "DB", "7.html")
+        csv_path = os.path.join(self.dataset, "Annotations", "DB", "7.csv")
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write("<html><body><p>Alpha beta gamma delta epsilon zeta.</p></body></html>")
+        with open(csv_path, "w", encoding="utf-8") as f:
+            f.write("RANumb,Text,Label\nra1,Alpha beta gamma iota,Others\n")
+
+        # The annotation shares 3 of its 4 tokens with the sentence: 0.75.
+        permissive = parser.process_document(
+            "DB_7",
+            html_path,
+            csv_path,
+            dataset_dir=self.dataset,
+            overlap_threshold=0.75,
+        )
+        strict = parser.process_document(
+            "DB_7",
+            html_path,
+            csv_path,
+            dataset_dir=self.dataset,
+            overlap_threshold=0.76,
+        )
+
+        self.assertEqual(len(permissive["aligned_matches"]), 1)
+        self.assertEqual(permissive["aligned_matches"][0][2], "partial_overlap")
+        self.assertEqual(len(strict["aligned_matches"]), 0)
+        self.assertEqual(len(strict["unmatched"]), 1)
+
+    def test_overlap_threshold_cli_validation(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                SCRIPT,
+                "--dataset-dir",
+                self.dataset,
+                "--output-dir",
+                self.out,
+                "--overlap-threshold",
+                "1.5",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("overlap threshold must be between 0 and 1", result.stderr)
+
     def test_sanity_check_does_not_overwrite_main_output(self):
         main_output = os.path.join(self.tmp.name, "output")
         os.makedirs(main_output)
